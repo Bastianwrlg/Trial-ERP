@@ -1,0 +1,6 @@
+{
+  "name": "Odoo ERP Alur SPK & Produksi",
+  "description": "Aplikasi ERP modular terinspirasi Odoo dengan alur Quotation, SPK, RAB, Engineering, Produksi dengan pemantauan suhu oven, inspeksi mutu QA, Surat Jalan, dan Invoicing serta manajemen hak akses menu pengguna.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
