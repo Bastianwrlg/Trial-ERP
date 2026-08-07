@@ -92,9 +92,10 @@ app.get("/api/quotations", (req, res) => {
   res.json(db.quotations);
 });
 
+// POST QUOTATIONS
 app.post("/api/quotations", (req, res) => {
   const db = readDB();
-  const { customerName, customerEmail, customerPhone, items, notes, date } = req.body;
+  const { customerName, customerEmail, customerPhone, items, notes, date, companyId } = req.body;
   
   const total = items.reduce((acc: number, item: any) => acc + (item.qty * item.price), 0);
   const prefix = "QTN/" + new Date().getFullYear() + "/";
@@ -102,6 +103,7 @@ app.post("/api/quotations", (req, res) => {
   
   const newQuotation: Quotation = {
     id: Date.now().toString(),
+    companyId: companyId || 'fujiyama',
     number: prefix + num,
     customerName,
     customerEmail,
@@ -142,6 +144,7 @@ app.patch("/api/quotations/:id/status", (req, res) => {
     // Create new SPK
     generatedSpk = {
       id: "spk_" + Date.now().toString(),
+      companyId: quotation.companyId || 'fujiyama',
       quotationId: quotation.id,
       quotationNumber: quotation.number,
       number: spkPrefix + spkNum,
@@ -156,6 +159,21 @@ app.patch("/api/quotations/:id/status", (req, res) => {
 
   writeDB(db);
   res.json({ quotation: db.quotations[qIndex], spk: generatedSpk });
+});
+
+// Delete Quotation
+app.delete("/api/quotations/:id", (req, res) => {
+  const db = readDB();
+  const { id } = req.params;
+
+  const qIndex = db.quotations.findIndex((q: any) => q.id === id);
+  if (qIndex === -1) {
+    return res.status(404).json({ error: "Penawaran tidak ditemukan" });
+  }
+
+  db.quotations.splice(qIndex, 1);
+  writeDB(db);
+  res.json({ success: true, message: "Penawaran berhasil dihapus" });
 });
 
 // SPKs API
@@ -252,6 +270,7 @@ function checkAndAdvanceSpk(db: any, spkIndex: number) {
 
     const newProdLog: ProductionLog = {
       id: "prod_" + Date.now().toString(),
+      companyId: spk.companyId || 'fujiyama',
       spkId: spk.id,
       spkNumber: spk.number,
       startDate: new Date().toISOString().split('T')[0],
@@ -306,6 +325,7 @@ app.patch("/api/production-logs/:id", (req, res) => {
     // Auto generate QA checklist in Pending state
     const newQa: QaChecklist = {
       id: "qa_" + Date.now().toString(),
+      companyId: log.companyId || 'fujiyama',
       spkId: log.spkId,
       spkNumber: log.spkNumber,
       inspectorName: "Quality Assurer",
@@ -370,6 +390,7 @@ app.post("/api/qa-checklists/:id/inspect", (req, res) => {
 
       const newSj: SuratJalan = {
         id: "sj_" + Date.now().toString(),
+        companyId: spk.companyId || qa.companyId || 'fujiyama',
         spkId: spk.id,
         spkNumber: spk.number,
         number: sjPrefix + sjNum,
@@ -433,6 +454,7 @@ app.patch("/api/surat-jalan/:id", (req, res) => {
 
       const newInv: Invoice = {
         id: "inv_" + Date.now().toString(),
+        companyId: spk.companyId || sj.companyId || 'fujiyama',
         spkId: spk.id,
         spkNumber: spk.number,
         number: invPrefix + invNum,
@@ -500,6 +522,20 @@ app.patch("/api/users/:id", (req, res) => {
   res.json(user);
 });
 
+app.delete("/api/users/:id", (req, res) => {
+  const db = readDB();
+  const { id } = req.params;
+
+  const userIndex = db.users.findIndex((u: any) => u.id === id);
+  if (userIndex === -1) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  db.users.splice(userIndex, 1);
+  writeDB(db);
+  res.json({ message: "User deleted successfully" });
+});
+
 // INVENTORY (BAHAN BAKU & STOK) API
 app.get("/api/inventory", (req, res) => {
   const db = readDB();
@@ -508,11 +544,12 @@ app.get("/api/inventory", (req, res) => {
 
 app.post("/api/inventory", (req, res) => {
   const db = readDB();
-  const { name, sku, category, qty, unit, minQty, unitPrice, supplier, notes } = req.body;
+  const { name, sku, category, qty, unit, minQty, unitPrice, supplier, notes, companyId } = req.body;
 
   const newId = "inv_" + Date.now().toString();
   const newItem = {
     id: newId,
+    companyId: companyId || 'fujiyama',
     name,
     sku: sku || "SKU-" + Math.floor(1000 + Math.random() * 9000),
     category: category || "Bahan Baku",
@@ -582,57 +619,77 @@ app.delete("/api/inventory/:id", (req, res) => {
 function getSeedData() {
   return {
     users: [
-      { id: "u1", name: "Administrator", username: "admin", role: "admin", allowedMenus: ["sales", "spk", "production", "qa", "logistics", "finance", "users"] },
+      { id: "u1", name: "Administrator", username: "admin", role: "admin", allowedMenus: ["sales", "spk", "production", "qa", "logistics", "finance", "inventory", "users"] },
       { id: "u2", name: "Budi Santoso", username: "budi", role: "sales", allowedMenus: ["sales", "finance"] },
       { id: "u3", name: "Eko Prasetyo", username: "eko", role: "engineering", allowedMenus: ["spk"] },
       { id: "u4", name: "Siti Rahma", username: "siti", role: "finance", allowedMenus: ["spk", "finance"] },
-      { id: "u5", name: "Agus Wijaya", username: "agus", role: "production", allowedMenus: ["spk", "production"] },
+      { id: "u5", name: "Agus Wijaya", username: "agus", role: "production", allowedMenus: ["spk", "production", "inventory"] },
       { id: "u6", name: "Rudi Hartono", username: "rudi", role: "qa", allowedMenus: ["production", "qa"] },
       { id: "u7", name: "Joko Widodo", username: "joko", role: "logistics", allowedMenus: ["logistics"] }
     ],
     quotations: [
       {
-        id: "q_seed_1",
-        number: "QTN/2026/0001",
+        id: "q_seed_fuji_1",
+        companyId: "fujiyama",
+        number: "QTN/FJ/2026/0001",
         customerName: "PT Global Tech Indonesia",
         customerEmail: "info@globaltech.co.id",
         customerPhone: "021-5551234",
         date: "2026-06-25",
         items: [
-          { id: "item1", name: "Panel Box Custom 1200x800x400", qty: 2, unit: "Unit", price: 12500000 },
+          { id: "item1", name: "Panel Box Custom 1200x800x400 (Fujiyama Spec)", qty: 2, unit: "Unit", price: 12500000 },
           { id: "item2", name: "Kabel NYY 4x16mm (Meter)", qty: 150, unit: "Meter", price: 75000 }
         ],
         total: 36250000,
         status: "Approved",
-        notes: "Project instalasi kelistrikan pabrik Tahap 1."
+        notes: "Project fabrikasi panel oven high-temp Fujiyama."
       },
       {
-        id: "q_seed_2",
-        number: "QTN/2026/0002",
-        customerName: "CV Maju Jaya Abadi",
-        customerEmail: "purchasing@majujaya.com",
-        customerPhone: "031-8884321",
+        id: "q_seed_arga_1",
+        companyId: "argathara",
+        number: "QTN/AG/2026/0001",
+        customerName: "PT Energi Perkasa Karawang",
+        customerEmail: "procurement@energiperkasa.com",
+        customerPhone: "0267-889911",
         date: "2026-06-26",
         items: [
-          { id: "item3", name: "Suhu Controller Module STC-3000", qty: 10, unit: "Pcs", price: 850000 }
+          { id: "item_arga1", name: "Cubicle Panel Distribution 20kV", qty: 1, unit: "Unit", price: 68000000 },
+          { id: "item_arga2", name: "Digital Metering Relay ABB", qty: 2, unit: "Pcs", price: 14500000 }
         ],
-        total: 8500000,
+        total: 97000000,
+        status: "Approved",
+        notes: "Instalasi gardu distribusi listrik Argathara Utama."
+      },
+      {
+        id: "q_seed_arta_1",
+        companyId: "artajaya",
+        number: "QTN/AT/2026/0001",
+        customerName: "CV Otomotif Presisi Nusantara",
+        customerEmail: "sales@otomotifpresisi.co.id",
+        customerPhone: "021-8991200",
+        date: "2026-06-27",
+        items: [
+          { id: "item_arta1", name: "Jig Fixture Precision Machining", qty: 5, unit: "Set", price: 8500000 },
+          { id: "item_arta2", name: "Shaft Stainless SS304 CNC Turned", qty: 50, unit: "Pcs", price: 450000 }
+        ],
+        total: 65000000,
         status: "Draft",
-        notes: "Uji coba modul controller otomatis."
+        notes: "Pemesanan komponen perakitan Artajaya Pratama."
       }
     ],
     spks: [
       {
-        id: "spk_seed_1",
-        quotationId: "q_seed_1",
-        quotationNumber: "QTN/2026/0001",
-        number: "SPK/2026/0001",
+        id: "spk_seed_fuji_1",
+        companyId: "fujiyama",
+        quotationId: "q_seed_fuji_1",
+        quotationNumber: "QTN/FJ/2026/0001",
+        number: "SPK/FJ/2026/0001",
         customerName: "PT Global Tech Indonesia",
         date: "2026-06-25",
         deadline: "2026-07-09",
         hppRab: {
           id: "rab_seed_1",
-          spkId: "spk_seed_1",
+          spkId: "spk_seed_fuji_1",
           materialsBudget: [
             { name: "Plate Steel 2mm", qty: 4, cost: 800000, total: 3200000 },
             { name: "Powder Coating Grey", qty: 2, cost: 450000, total: 900000 },
@@ -652,7 +709,7 @@ function getSeedData() {
         },
         engineering: {
           id: "eng_seed_1",
-          spkId: "spk_seed_1",
+          spkId: "spk_seed_fuji_1",
           designName: "Layout Panel Custom GT-1200.pdf",
           drawingsUrl: "#",
           machines: [
@@ -670,26 +727,39 @@ function getSeedData() {
           updatedAt: "2026-06-25"
         },
         status: "In Production",
-        notes: "Prioritas tinggi, harus presisi tinggi."
+        notes: "Prioritas tinggi, pabrik Fujiyama Industry."
+      },
+      {
+        id: "spk_seed_arga_1",
+        companyId: "argathara",
+        quotationId: "q_seed_arga_1",
+        quotationNumber: "QTN/AG/2026/0001",
+        number: "SPK/AG/2026/0001",
+        customerName: "PT Energi Perkasa Karawang",
+        date: "2026-06-26",
+        deadline: "2026-07-15",
+        status: "Pending",
+        notes: "Pekerjaan panel gardu Argathara Utama."
       }
     ],
     productionLogs: [
       {
-        id: "prod_seed_1",
-        spkId: "spk_seed_1",
-        spkNumber: "SPK/2026/0001",
+        id: "prod_seed_fuji_1",
+        companyId: "fujiyama",
+        spkId: "spk_seed_fuji_1",
+        spkNumber: "SPK/FJ/2026/0001",
         startDate: "2026-06-26",
         materialsUsed: [
           { name: "Plate Steel 2mm", qty: 4, lotNumber: "LOT-8871" },
           { name: "Powder Coating Grey", qty: 2, lotNumber: "LOT-1102" }
         ],
-        temperature: 25.5, // Suhu ruang oven terpantau
+        temperature: 25.5,
         humidity: 50,
-        batchNumber: "PRD/2026/0001",
+        batchNumber: "PRD/FJ/2026/0001",
         operatorName: "Agus Wijaya",
         mutuCheck: "Proses welding kuat, cat merata tanpa cacat permukaan.",
         status: "In Progress",
-        notes: "Sedang pengerjaan wiring internal."
+        notes: "Lini produksi Fujiyama."
       }
     ],
     qaChecklists: [],
@@ -697,69 +767,74 @@ function getSeedData() {
     invoices: [],
     inventory: [
       {
-        id: "inv_1",
-        name: "Plate Steel 2mm",
-        sku: "RAW-PLT-001",
+        id: "inv_fj_1",
+        companyId: "fujiyama",
+        name: "Plate Steel 2mm (Fujiyama)",
+        sku: "FJ-RAW-PLT-001",
         category: "Bahan Baku",
         qty: 45,
         unit: "Lembar",
         minQty: 10,
         unitPrice: 800000,
         supplier: "PT Krakatau Steel",
-        notes: "Bahan utama pembuatan bodi box panel",
+        notes: "Bahan bodi box panel high-temp",
         lastRestocked: "2026-06-25"
       },
       {
-        id: "inv_2",
+        id: "inv_fj_2",
+        companyId: "fujiyama",
         name: "Powder Coating Grey RAL-7035",
-        sku: "RAW-PWD-002",
+        sku: "FJ-RAW-PWD-002",
         category: "Bahan Baku",
-        qty: 12,
+        qty: 18,
         unit: "Kg",
         minQty: 5,
         unitPrice: 450000,
         supplier: "Sinar Warna Abadi",
-        notes: "Pelapis luar tahan karat cat oven",
+        notes: "Cat oven powder coating",
         lastRestocked: "2026-06-24"
       },
       {
-        id: "inv_3",
-        name: "Copper Busbar 3x30mm",
-        sku: "RAW-COP-003",
+        id: "inv_ag_1",
+        companyId: "argathara",
+        name: "Busbar Tembaga 10x100mm (Argathara)",
+        sku: "AG-COP-100",
         category: "Bahan Baku",
-        qty: 80,
+        qty: 32,
         unit: "Batang",
-        minQty: 15,
-        unitPrice: 250000,
-        supplier: "Lembah Tembaga Jaya",
-        notes: "Busbar penghantar daya tinggi",
-        lastRestocked: "2026-06-25"
-      },
-      {
-        id: "inv_4",
-        name: "Kabel NYY 4x16mm",
-        sku: "RAW-KBL-004",
-        category: "Bahan Baku",
-        qty: 500,
-        unit: "Meter",
-        minQty: 100,
-        unitPrice: 75000,
-        supplier: "Kabel Metal Indonesia",
-        notes: "Kabel instalasi distribusi daya",
-        lastRestocked: "2026-06-25"
-      },
-      {
-        id: "inv_5",
-        name: "Suhu Controller Module STC-3000",
-        sku: "RAW-CTR-005",
-        category: "Suku Cadang",
-        qty: 25,
-        unit: "Pcs",
-        minQty: 5,
-        unitPrice: 850000,
-        supplier: "Autonics Distributor",
-        notes: "Modul controller suhu otomatis",
+        minQty: 8,
+        unitPrice: 1450000,
+        supplier: "PT Tembaga Nusantara",
+        notes: "Rel daya tinggi panel transmisi 20kV",
         lastRestocked: "2026-06-26"
+      },
+      {
+        id: "inv_ag_2",
+        companyId: "argathara",
+        name: "Relay Proteksi Digital ABB",
+        sku: "AG-ELC-RLY",
+        category: "Suku Cadang",
+        qty: 15,
+        unit: "Pcs",
+        minQty: 3,
+        unitPrice: 12000000,
+        supplier: "ABB Indonesia",
+        notes: "Komponen otokontrol listrik",
+        lastRestocked: "2026-06-25"
+      },
+      {
+        id: "inv_at_1",
+        companyId: "artajaya",
+        name: "Bar Stock Stainless Steel SS304 Ø50mm",
+        sku: "AT-RAW-SS304",
+        category: "Bahan Baku",
+        qty: 60,
+        unit: "Batang",
+        minQty: 12,
+        unitPrice: 950000,
+        supplier: "CV Logam Presisi",
+        notes: "Bahan bubut CNC komponen mekanikal",
+        lastRestocked: "2026-06-27"
       }
     ]
   };

@@ -26,9 +26,10 @@ interface InventoryAppProps {
   inventory: InventoryItem[];
   onRefresh: () => void;
   currentUserRole: string;
+  selectedCompanyId?: string;
 }
 
-export default function InventoryApp({ inventory, onRefresh, currentUserRole }: InventoryAppProps) {
+export default function InventoryApp({ inventory, onRefresh, currentUserRole, selectedCompanyId }: InventoryAppProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Semua");
   const [isAdding, setIsAdding] = useState(false);
@@ -98,7 +99,8 @@ export default function InventoryApp({ inventory, onRefresh, currentUserRole }: 
       minQty: Number(minQty),
       unitPrice: Number(unitPrice),
       supplier,
-      notes
+      notes,
+      companyId: selectedCompanyId
     };
 
     try {

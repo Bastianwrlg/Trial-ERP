@@ -5,15 +5,16 @@
 
 import React, { useState } from "react";
 import { Quotation, QuotationItem } from "../types";
-import { Plus, Check, Archive, ArrowRight, User, Calendar, DollarSign, FileText } from "lucide-react";
+import { Plus, Check, Archive, ArrowRight, User, Calendar, DollarSign, FileText, Trash2 } from "lucide-react";
 
 interface SalesAppProps {
   quotations: Quotation[];
   onRefresh: () => void;
   currentUserRole: string;
+  selectedCompanyId?: string;
 }
 
-export default function SalesApp({ quotations, onRefresh, currentUserRole }: SalesAppProps) {
+export default function SalesApp({ quotations, onRefresh, currentUserRole, selectedCompanyId }: SalesAppProps) {
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   
@@ -56,7 +57,8 @@ export default function SalesApp({ quotations, onRefresh, currentUserRole }: Sal
           customerEmail,
           customerPhone,
           notes,
-          items
+          items,
+          companyId: selectedCompanyId
         })
       });
       if (res.ok) {
@@ -88,6 +90,31 @@ export default function SalesApp({ quotations, onRefresh, currentUserRole }: Sal
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleDeleteQuotation = async (id: string, qNumber: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus dokumen penawaran ${qNumber}?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/quotations/${id}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        if (selectedQuotation?.id === id) {
+          setSelectedQuotation(null);
+        }
+        onRefresh();
+      } else {
+        alert("Gagal menghapus penawaran.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat menghapus penawaran.");
     }
   };
 
@@ -292,21 +319,30 @@ export default function SalesApp({ quotations, onRefresh, currentUserRole }: Sal
                   <div
                     key={q.id}
                     onClick={() => setSelectedQuotation(q)}
-                    className={`p-4 cursor-pointer hover:bg-slate-50 transition ${
+                    className={`p-4 cursor-pointer hover:bg-slate-50 transition group relative ${
                       selectedQuotation?.id === q.id ? "bg-violet-50/50 border-l-4 border-violet-700" : ""
                     }`}
                   >
                     <div className="flex justify-between items-start mb-1">
                       <span className="font-semibold text-xs text-slate-500">{q.number}</span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                        q.status === 'Approved' 
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : q.status === 'Archived'
-                            ? 'bg-slate-100 text-slate-600'
-                            : 'bg-amber-50 text-amber-700 border border-amber-200'
-                      }`}>
-                        {q.status === 'Approved' ? 'Disetujui (Y)' : q.status === 'Archived' ? 'Arsip (N)' : 'Draft'}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                          q.status === 'Approved' 
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : q.status === 'Archived'
+                              ? 'bg-slate-100 text-slate-600'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
+                          {q.status === 'Approved' ? 'Disetujui (Y)' : q.status === 'Archived' ? 'Arsip (N)' : 'Draft'}
+                        </span>
+                        <button
+                          onClick={(e) => handleDeleteQuotation(q.id, q.number, e)}
+                          title="Hapus Penawaran"
+                          className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-1 rounded transition opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                     <h4 className="font-bold text-slate-800 text-sm mb-1 truncate">{q.customerName}</h4>
                     <div className="flex justify-between items-center text-xs text-slate-500">
@@ -350,22 +386,32 @@ export default function SalesApp({ quotations, onRefresh, currentUserRole }: Sal
                     </div>
 
                     {/* Action buttons based on current state & role */}
-                    {selectedQuotation.status === 'Draft' && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleUpdateStatus(selectedQuotation.id, 'Archived')}
-                          className="bg-slate-100 border border-slate-300 text-slate-700 font-semibold text-xs px-3 py-1.5 rounded-lg hover:bg-slate-200 flex items-center gap-1 transition"
-                        >
-                          <Archive className="w-3.5 h-3.5 text-slate-500" /> Tolak & Arsipkan (N)
-                        </button>
-                        <button
-                          onClick={() => handleUpdateStatus(selectedQuotation.id, 'Approved')}
-                          className="bg-emerald-600 text-white font-semibold text-xs px-3.5 py-1.5 rounded-lg hover:bg-emerald-700 flex items-center gap-1 transition shadow-xs"
-                        >
-                          <Check className="w-3.5 h-3.5" /> Setujui & Buat SPK (Y)
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {selectedQuotation.status === 'Draft' && (
+                        <>
+                          <button
+                            onClick={() => handleUpdateStatus(selectedQuotation.id, 'Archived')}
+                            className="bg-slate-100 border border-slate-300 text-slate-700 font-semibold text-xs px-3 py-1.5 rounded-lg hover:bg-slate-200 flex items-center gap-1 transition"
+                          >
+                            <Archive className="w-3.5 h-3.5 text-slate-500" /> Tolak & Arsipkan (N)
+                          </button>
+                          <button
+                            onClick={() => handleUpdateStatus(selectedQuotation.id, 'Approved')}
+                            className="bg-emerald-600 text-white font-semibold text-xs px-3.5 py-1.5 rounded-lg hover:bg-emerald-700 flex items-center gap-1 transition shadow-xs"
+                          >
+                            <Check className="w-3.5 h-3.5" /> Setujui & Buat SPK (Y)
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => handleDeleteQuotation(selectedQuotation.id, selectedQuotation.number)}
+                        title="Hapus Dokumen Penawaran Ini"
+                        className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 font-semibold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                        <span>Hapus</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Document Header */}

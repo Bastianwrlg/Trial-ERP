@@ -3,6 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export type CompanyId = 'fujiyama' | 'argathara' | 'artajaya';
+
+export interface Company {
+  id: CompanyId;
+  name: string;
+  fullName?: string;
+  code: string;
+  tagline: string;
+  badgeColor: string;
+  primaryColor: string;
+  address: string;
+  phone?: string;
+  email?: string;
+  npwp?: string;
+  bankInfo?: string;
+  logoText: string;
+  logoSvg?: string;
+}
+
 export type UserRole = 
   | 'admin'
   | 'sales'
@@ -32,6 +51,7 @@ export interface QuotationItem {
 
 export interface Quotation {
   id: string;
+  companyId?: CompanyId;
   number: string;
   customerName: string;
   customerEmail?: string;
@@ -72,6 +92,7 @@ export interface EngineeringDetail {
 // SPK (Surat Perintah Kerja - Work Order)
 export interface Spk {
   id: string;
+  companyId?: CompanyId;
   quotationId: string;
   quotationNumber: string;
   number: string;
@@ -87,6 +108,7 @@ export interface Spk {
 // Produksi (Production parameters)
 export interface ProductionLog {
   id: string;
+  companyId?: CompanyId;
   spkId: string;
   spkNumber: string;
   startDate: string;
@@ -104,6 +126,7 @@ export interface ProductionLog {
 // Quality Assurance (QA)
 export interface QaChecklist {
   id: string;
+  companyId?: CompanyId;
   spkId: string;
   spkNumber: string;
   inspectorName: string;
@@ -120,6 +143,7 @@ export interface QaChecklist {
 // Surat Jalan (SJ - Delivery Note)
 export interface SuratJalan {
   id: string;
+  companyId?: CompanyId;
   spkId: string;
   spkNumber: string;
   number: string;
@@ -136,6 +160,7 @@ export interface SuratJalan {
 // Invoice
 export interface Invoice {
   id: string;
+  companyId?: CompanyId;
   spkId: string;
   spkNumber: string;
   number: string;
@@ -151,6 +176,7 @@ export interface Invoice {
 // Inventory Item (Bahan Baku / Stok)
 export interface InventoryItem {
   id: string;
+  companyId?: CompanyId;
   name: string;
   sku: string;
   category: string; // e.g. 'Bahan Baku', 'Suku Cadang', 'Kemasan'
