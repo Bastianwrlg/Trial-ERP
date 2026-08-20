@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type CompanyId = 'fujiyama' | 'argathara' | 'artajaya';
+export type CompanyId = 'fujiyama' | 'argathara' | 'artajaya' | string;
 
 export interface Company {
-  id: CompanyId;
+  id: string;
   name: string;
   fullName?: string;
   code: string;
@@ -20,6 +20,8 @@ export interface Company {
   bankInfo?: string;
   logoText: string;
   logoSvg?: string;
+  logoUrl?: string; // Uploaded image data URL or public URL
+  logoType?: 'preset' | 'upload' | 'svg' | 'text';
 }
 
 export type UserRole = 
@@ -35,15 +37,19 @@ export interface User {
   id: string;
   name: string;
   username: string;
+  password?: string;
   role: UserRole;
   allowedMenus: string[]; // Menus they can access
 }
 
 export type QuotationStatus = 'Draft' | 'Approved' | 'Archived';
+export type ItemType = 'barang' | 'jasa';
 
 export interface QuotationItem {
   id: string;
+  type?: ItemType; // 'barang' | 'jasa'
   name: string;
+  description?: string; // Deskripsi spesifikasi barang atau lingkup pengerjaan jasa
   qty: number;
   unit: string;
   price: number;
@@ -157,6 +163,18 @@ export interface SuratJalan {
   deliveredAt?: string;
 }
 
+// Invoice Item (Rincian Barang & Jasa)
+export interface InvoiceItem {
+  id: string;
+  type: ItemType; // 'barang' | 'jasa'
+  name: string; // Nama Barang / Jasa
+  description?: string; // Deskripsi spesifikasi barang atau lingkup pengerjaan jasa
+  qty: number;
+  unit: string;
+  price: number;
+  total: number;
+}
+
 // Invoice
 export interface Invoice {
   id: string;
@@ -166,6 +184,9 @@ export interface Invoice {
   number: string;
   date: string;
   customerName: string;
+  itemDescription?: string; // Keterangan ringkasan barang & jasa
+  items?: InvoiceItem[]; // Rincian Barang & Jasa
+  notes?: string;
   amount: number;
   tax: number;
   totalAmount: number;

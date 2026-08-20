@@ -13,7 +13,8 @@ import {
   SuratJalan, 
   Invoice,
   InventoryItem,
-  CompanyId
+  CompanyId,
+  Company
 } from "./types";
 import { COMPANIES } from "./data/companies";
 
@@ -28,6 +29,8 @@ import InventoryApp from "./components/InventoryApp";
 import WorkflowVisualizer from "./components/WorkflowVisualizer";
 import { CompanySelector } from "./components/CompanySelector";
 import { LanAccessModal } from "./components/LanAccessModal";
+import { LoginForm } from "./components/LoginForm";
+import { CompanyCustomizerModal } from "./components/CompanyCustomizerModal";
 
 import { 
   Grid, 
@@ -49,8 +52,20 @@ import {
   Wifi,
   ArrowLeft,
   ArrowRight,
-  Home
+  Home,
+  Palette,
+  Edit3
 } from "lucide-react";
+
+const DEFAULT_USERS: User[] = [
+  { id: "u1", name: "Administrator", username: "admin", password: "123", role: "admin", allowedMenus: ["sales", "spk", "production", "qa", "logistics", "finance", "inventory", "users"] },
+  { id: "u2", name: "Budi Santoso", username: "budi", password: "123", role: "sales", allowedMenus: ["sales", "finance"] },
+  { id: "u3", name: "Eko Prasetyo", username: "eko", password: "123", role: "engineering", allowedMenus: ["spk"] },
+  { id: "u4", name: "Siti Rahma", username: "siti", password: "123", role: "finance", allowedMenus: ["spk", "finance"] },
+  { id: "u5", name: "Agus Wijaya", username: "agus", password: "123", role: "production", allowedMenus: ["spk", "production", "inventory"] },
+  { id: "u6", name: "Rudi Hartono", username: "rudi", password: "123", role: "qa", allowedMenus: ["production", "qa"] },
+  { id: "u7", name: "Joko Widodo", username: "joko", password: "123", role: "logistics", allowedMenus: ["logistics"] }
+];
 
 export default function App() {
   const [activeApp, setActiveApp] = useState<string | null>(null);
@@ -59,8 +74,13 @@ export default function App() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<CompanyId | null>(() => {
     return (localStorage.getItem("erp_company_id") as CompanyId) || null;
   });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem("erp_auth") === "true";
+  });
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [isLanModalOpen, setIsLanModalOpen] = useState(false);
+  const [isCustomizerModalOpen, setIsCustomizerModalOpen] = useState(false);
+  const [customizerCompanyId, setCustomizerCompanyId] = useState<string | null>(null);
 
   const navigateToModule = (appId: string | null) => {
     if (appId === activeApp) return;
@@ -96,6 +116,7 @@ export default function App() {
   };
   
   // Data State
+  const [companies, setCompanies] = useState<Company[]>(COMPANIES);
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
@@ -114,7 +135,14 @@ export default function App() {
       const res = await fetch("/api/db");
       if (res.ok) {
         const data = await res.json();
-        setUsers(data.users || []);
+        if (data.companies && Array.isArray(data.companies) && data.companies.length > 0) {
+          setCompanies(data.companies);
+        } else {
+          setCompanies(COMPANIES);
+        }
+
+        const loadedUsers = data.users || DEFAULT_USERS;
+        setUsers(loadedUsers);
         setQuotations(data.quotations || []);
         setSpks(data.spks || []);
         setProductionLogs(data.productionLogs || []);
@@ -123,13 +151,28 @@ export default function App() {
         setInvoices(data.invoices || []);
         setInventory(data.inventory || []);
 
-        // Default current user to Administrator on first load
-        if (!currentUser && data.users && data.users.length > 0) {
-          setCurrentUser(data.users[0]);
+        const storedUserId = localStorage.getItem("erp_user_id");
+        if (storedUserId) {
+          const match = loadedUsers.find((u: User) => u.id === storedUserId);
+          if (match) setCurrentUser(match);
+          else setCurrentUser(loadedUsers[0]);
+        } else if (!currentUser) {
+          setCurrentUser(loadedUsers[0]);
         }
+      } else {
+        setCompanies(COMPANIES);
+        setUsers(DEFAULT_USERS);
+        const storedUserId = localStorage.getItem("erp_user_id");
+        const match = DEFAULT_USERS.find((u: User) => u.id === storedUserId);
+        setCurrentUser(match || DEFAULT_USERS[0]);
       }
     } catch (err) {
-      console.error("Error fetching ERP database:", err);
+      console.error("Error fetching ERP database, using client fallback:", err);
+      setCompanies(COMPANIES);
+      setUsers(DEFAULT_USERS);
+      const storedUserId = localStorage.getItem("erp_user_id");
+      const match = DEFAULT_USERS.find((u: User) => u.id === storedUserId);
+      setCurrentUser(match || DEFAULT_USERS[0]);
     } finally {
       setIsLoading(false);
     }
@@ -146,12 +189,13 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    setSelectedCompanyId(null);
-    localStorage.removeItem("erp_company_id");
+    setIsAuthenticated(false);
+    localStorage.removeItem("erp_auth");
+    localStorage.removeItem("erp_user_id");
     setActiveApp(null);
   };
 
-  const activeCompany = COMPANIES.find(c => c.id === selectedCompanyId);
+  const activeCompany = (companies.find(c => c.id === selectedCompanyId) || companies[0]) ?? null;
 
   // Calculate counts per company for CompanySelector
   const quotationCountByCompany = quotations.reduce((acc, q) => {
@@ -195,6 +239,12 @@ export default function App() {
 
   const handleSwitchUser = (user: User) => {
     setCurrentUser(user);
+    localStorage.setItem("erp_user_id", user.id);
+  };
+
+  const handleOpenCustomizer = (companyId?: string) => {
+    setCustomizerCompanyId(companyId || selectedCompanyId || companies[0]?.id || "fujiyama");
+    setIsCustomizerModalOpen(true);
   };
 
   // Helper to determine active workflow node for visualizer
@@ -243,14 +293,14 @@ export default function App() {
     { id: "logistics", title: "Surat Jalan & Kirim", desc: "Logistik & Ekspedisi", icon: Truck, color: "bg-teal-500 text-white" },
     { id: "finance", title: "Penagihan & Invoice", desc: "Billing & PPn 11%", icon: Receipt, color: "bg-violet-500 text-white" },
     { id: "inventory", title: "Inventaris & Bahan Baku", desc: "Manajemen Stok & Bahan Baku", icon: Package, color: "bg-slate-600 text-white" },
-    { id: "users", title: "Setelan Otorisasi", desc: "Manajemen Akses Menu", icon: Users, color: "bg-rose-500 text-white" }
+    { id: "users", title: "Profil PT & Akses User", desc: "Nama/Logo & Akses Menu", icon: Users, color: "bg-rose-500 text-white" }
   ];
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white p-4">
         <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-violet-500 mb-4"></div>
-        <div className="text-sm font-semibold tracking-wide">Menghubungkan ke Mesin ERP Odoo...</div>
+        <div className="text-sm font-semibold tracking-wide">Menghubungkan ke Mesin ERP...</div>
       </div>
     );
   }
@@ -261,17 +311,17 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 font-sans antialiased text-slate-800">
       
-      {/* Top Odoo Navigation Bar */}
+      {/* Top Navigation Bar */}
       <header className="bg-[#714B67] text-white flex items-center justify-between px-4 py-2.5 shadow-md shrink-0 select-none">
         <div className="flex items-center gap-3">
           {/* App Launcher Grid button */}
           <button 
             onClick={() => navigateToModule(null)}
             title="Home Menu Apps"
-            className="p-1.5 hover:bg-white/10 rounded transition focus:outline-none flex items-center gap-1.5"
+            className="p-1.5 hover:bg-white/10 rounded transition focus:outline-none flex items-center gap-1.5 cursor-pointer"
           >
             <Grid className="w-5 h-5" />
-            <span className="font-extrabold tracking-wider text-sm hidden sm:inline">Odoo ERP</span>
+            <span className="font-extrabold tracking-wider text-sm hidden sm:inline">ERP</span>
           </button>
 
           {/* Back & Forward Quick Navigation Buttons in Navbar */}
@@ -280,14 +330,14 @@ export default function App() {
               onClick={handleGoBack}
               disabled={historyIndex === 0 && activeApp === null}
               title="Kembali ke Halaman / Modul Sebelumnya (Back)"
-              className="p-1 hover:bg-white/20 active:bg-white/30 disabled:opacity-30 disabled:hover:bg-transparent rounded transition text-white"
+              className="p-1 hover:bg-white/20 active:bg-white/30 disabled:opacity-30 disabled:hover:bg-transparent rounded transition text-white cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <button
               onClick={handleGoForward}
               title="Maju ke Halaman / Modul Selanjutnya (Forward)"
-              className="p-1 hover:bg-white/20 active:bg-white/30 rounded transition text-white"
+              className="p-1 hover:bg-white/20 active:bg-white/30 rounded transition text-white cursor-pointer"
             >
               <ArrowRight className="w-4 h-4" />
             </button>
@@ -296,10 +346,14 @@ export default function App() {
           {/* Company Selector Button in Navbar */}
           <button
             onClick={() => setIsCompanyModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-1 rounded-lg bg-black/25 hover:bg-black/35 border border-white/20 text-white text-xs font-bold transition shadow-xs"
-            title="Ganti Perusahaan"
+            className="flex items-center gap-2 px-3 py-1 rounded-lg bg-black/25 hover:bg-black/35 border border-white/20 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+            title="Ganti Perusahaan / Unit Bisnis"
           >
-            <Building2 className="w-4 h-4 text-amber-300" />
+            {activeCompany?.logoUrl ? (
+              <img src={activeCompany.logoUrl} alt="Logo" className="w-4 h-4 object-contain rounded" />
+            ) : (
+              <Building2 className="w-4 h-4 text-amber-300" />
+            )}
             <span className="max-w-[150px] sm:max-w-xs truncate">{activeCompany ? activeCompany.name : 'Pilih Perusahaan'}</span>
             <ChevronDown className="w-3.5 h-3.5 opacity-70" />
           </button>
@@ -315,7 +369,7 @@ export default function App() {
                 {activeApp === 'logistics' && 'Surat Jalan & Logistik'}
                 {activeApp === 'finance' && 'Invoice & Penagihan'}
                 {activeApp === 'inventory' && 'Inventaris & Bahan Baku'}
-                {activeApp === 'users' && 'Setelan Akses'}
+                {activeApp === 'users' && 'Setelan Profil & Akses'}
               </span>
             </div>
           )}
@@ -326,31 +380,37 @@ export default function App() {
           <button
             onClick={() => setIsLanModalOpen(true)}
             title="Akses ERP Lewat Jaringan Lokal (Wi-Fi / LAN)"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-600/90 hover:bg-emerald-600 text-white text-xs font-bold transition shadow-xs border border-emerald-400/30"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-600/90 hover:bg-emerald-600 text-white text-xs font-bold transition shadow-xs border border-emerald-400/30 cursor-pointer"
           >
             <Wifi className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Akses LAN</span>
           </button>
 
-          <div className="hidden md:flex items-center gap-2 bg-black/15 px-3 py-1.5 rounded-lg border border-white/10 text-xs">
-            <span className="text-white/60">User:</span>
-            <span className="font-bold text-violet-200">{currentUser?.name}</span>
-            <span className="bg-violet-500/30 text-violet-200 text-[10px] px-1.5 py-0.5 rounded font-mono font-bold uppercase">{currentUser?.role}</span>
-          </div>
+          {isAuthenticated ? (
+            <div className="hidden md:flex items-center gap-2 bg-black/15 px-3 py-1.5 rounded-lg border border-white/10 text-xs">
+              <span className="text-white/60">User:</span>
+              <span className="font-bold text-violet-200">{currentUser?.name}</span>
+              <span className="bg-violet-500/30 text-violet-200 text-[10px] px-1.5 py-0.5 rounded font-mono font-bold uppercase">{currentUser?.role}</span>
+            </div>
+          ) : (
+            <div className="hidden md:flex items-center gap-2 bg-black/15 px-3 py-1.5 rounded-lg border border-white/10 text-xs text-amber-200 font-medium">
+              Silakan Login
+            </div>
+          )}
 
           <button
             onClick={handleResetDB}
             title="Reset ulang seluruh database simulasi"
-            className="p-1.5 hover:bg-white/10 rounded transition text-white/80 hover:text-white"
+            className="p-1.5 hover:bg-white/10 rounded transition text-white/80 hover:text-white cursor-pointer"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
 
-          {selectedCompanyId !== null && (
+          {isAuthenticated && (
             <button
               onClick={handleLogout}
-              title="Keluar dari Perusahaan / Kembali ke Login Perusahaan"
-              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-red-600/90 hover:bg-red-700 text-white text-xs font-bold transition shadow-xs border border-red-400/30"
+              title="Keluar dari Akun / Kembali ke Form Login"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-red-600/90 hover:bg-red-700 text-white text-xs font-bold transition shadow-xs border border-red-400/30 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Logout</span>
@@ -369,6 +429,26 @@ export default function App() {
               onSelectCompany={handleSelectCompany}
               quotationCountByCompany={quotationCountByCompany}
               spkCountByCompany={spkCountByCompany}
+              companies={companies}
+              onOpenCustomizer={handleOpenCustomizer}
+            />
+          </div>
+        ) : !isAuthenticated ? (
+          /* Login Form after Company Selection */
+          <div className="flex-1 overflow-y-auto bg-slate-100 flex items-center justify-center py-6">
+            <LoginForm
+              company={activeCompany!}
+              users={users}
+              onLoginSuccess={(user) => {
+                setCurrentUser(user);
+                setIsAuthenticated(true);
+                localStorage.setItem("erp_auth", "true");
+                localStorage.setItem("erp_user_id", user.id);
+              }}
+              onChangeCompany={() => {
+                setSelectedCompanyId(null);
+                localStorage.removeItem("erp_company_id");
+              }}
             />
           </div>
         ) : activeApp === null ? (
@@ -386,14 +466,14 @@ export default function App() {
                   <span>Entitas Aktif: {activeCompany?.name} ({activeCompany?.code})</span>
                   <button
                     onClick={() => setIsCompanyModalOpen(true)}
-                    className="ml-1 text-indigo-600 hover:underline font-bold"
+                    className="ml-1 text-indigo-600 hover:underline font-bold cursor-pointer"
                   >
                     [ Ganti ]
                   </button>
                   <span className="text-slate-300">|</span>
                   <button
                     onClick={handleLogout}
-                    className="text-rose-600 hover:underline font-bold flex items-center gap-1"
+                    className="text-rose-600 hover:underline font-bold flex items-center gap-1 cursor-pointer"
                     title="Logout & Kembali Pilih Perusahaan"
                   >
                     <LogOut className="w-3 h-3" />
@@ -405,7 +485,7 @@ export default function App() {
                   ERP Manufaktur SPK & Produksi - {activeCompany?.name}
                 </h1>
                 <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-                  Sistem ERP terintegrasi penuh yang mengotomasi alur Surat Perintah Kerja (SPK), Costing Anggaran (RAB/HPP), Desain Engineering, Rekaman Suhu Oven, Uji Mutu QA, Surat Jalan Logistik, dan Penagihan Invoice.
+                  {activeCompany?.fullName ? `${activeCompany.fullName} — ` : ''}Sistem ERP terintegrasi penuh yang mengotomasi alur Surat Perintah Kerja (SPK), Costing Anggaran (RAB/HPP), Desain Engineering, Rekaman Suhu Oven, Uji Mutu QA, Surat Jalan Logistik, dan Penagihan Invoice.
                 </p>
                 <div className="flex items-center gap-2 mt-4 text-xs font-semibold text-violet-700 bg-violet-50 px-3 py-1.5 rounded-lg border border-violet-100 w-fit">
                   <UserIcon className="w-4 h-4" />
@@ -534,13 +614,13 @@ export default function App() {
                 <div className="mt-6 flex gap-3">
                   <button
                     onClick={() => setActiveApp(null)}
-                    className="px-4 py-2 border border-slate-300 bg-white rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                    className="px-4 py-2 border border-slate-300 bg-white rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
                   >
                     Kembali ke Dashboard
                   </button>
                   <button
                     onClick={() => setActiveApp("users")}
-                    className="px-4 py-2 bg-violet-700 text-white rounded-lg text-xs font-bold hover:bg-violet-800 transition"
+                    className="px-4 py-2 bg-violet-700 text-white rounded-lg text-xs font-bold hover:bg-violet-800 transition cursor-pointer"
                   >
                     Ganti Akun Simulator
                   </button>
@@ -585,6 +665,8 @@ export default function App() {
                     sjList={filteredSjList} 
                     onRefresh={fetchData} 
                     currentUserRole={currentUser?.role || ""} 
+                    selectedCompanyId={selectedCompanyId}
+                    companies={companies}
                   />
                 )}
                 {activeApp === "finance" && (
@@ -593,6 +675,7 @@ export default function App() {
                     onRefresh={fetchData} 
                     currentUserRole={currentUser?.role || ""} 
                     selectedCompanyId={selectedCompanyId}
+                    companies={companies}
                   />
                 )}
                 {activeApp === "inventory" && (
@@ -606,6 +689,8 @@ export default function App() {
                 {activeApp === "users" && (
                   <SettingsApp 
                     users={users} 
+                    companies={companies}
+                    selectedCompanyId={selectedCompanyId}
                     onRefresh={fetchData} 
                     currentUserRole={currentUser?.role || ""} 
                     onSwitchSessionUser={handleSwitchUser} 
@@ -628,10 +713,24 @@ export default function App() {
               isModal={true}
               quotationCountByCompany={quotationCountByCompany}
               spkCountByCompany={spkCountByCompany}
+              companies={companies}
+              onOpenCustomizer={(cId) => {
+                setIsCompanyModalOpen(false);
+                handleOpenCustomizer(cId);
+              }}
             />
           </div>
         </div>
       )}
+
+      {/* Standalone Company Customizer Modal */}
+      <CompanyCustomizerModal
+        isOpen={isCustomizerModalOpen}
+        onClose={() => setIsCustomizerModalOpen(false)}
+        onSaved={fetchData}
+        companies={companies}
+        selectedCompanyId={customizerCompanyId}
+      />
 
       {/* LAN Access Guide Modal */}
       <LanAccessModal
@@ -644,6 +743,7 @@ export default function App() {
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
           <span>Sistem: <strong>{activeCompany ? activeCompany.name : 'Semua Perusahaan'}</strong></span>
+          {activeCompany?.fullName && <span className="text-slate-500 hidden sm:inline">({activeCompany.fullName})</span>}
         </div>
         <div className="flex items-center gap-3">
           <span>Ganti Role Instan:</span>
@@ -652,7 +752,7 @@ export default function App() {
               <button
                 key={u.id}
                 onClick={() => handleSwitchUser(u)}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
                   currentUser?.id === u.id
                     ? 'bg-violet-600 text-white font-extrabold'
                     : 'bg-slate-800 text-slate-300 hover:bg-slate-700'

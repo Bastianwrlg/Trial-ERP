@@ -14,8 +14,10 @@ import {
   ProductionLog, 
   QaChecklist, 
   SuratJalan, 
-  Invoice 
+  Invoice,
+  Company 
 } from "./src/types";
+import { COMPANIES } from "./src/data/companies";
 
 // Path to file database
 const DB_FILE = path.join(process.cwd(), "server_db.json");
@@ -32,9 +34,47 @@ function readDB() {
     const raw = fs.readFileSync(DB_FILE, "utf-8");
     const parsed = JSON.parse(raw);
     let updated = false;
+    if (!parsed.companies || parsed.companies.length === 0) {
+      parsed.companies = getSeedData().companies;
+      updated = true;
+    }
     if (!parsed.inventory) {
       parsed.inventory = getSeedData().inventory;
       updated = true;
+    }
+    if (!parsed.invoices || parsed.invoices.length === 0) {
+      parsed.invoices = getSeedData().invoices;
+      updated = true;
+    } else {
+      // Upgrade existing invoices without items
+      parsed.invoices.forEach((inv: any, idx: number) => {
+        if (!inv.items || inv.items.length === 0) {
+          inv.itemDescription = inv.itemDescription || "Pengadaan Barang & Layanan Jasa Manufaktur " + (inv.spkNumber || inv.number);
+          inv.items = [
+            {
+              id: "inv_item_auto_" + idx + "_1",
+              type: "barang",
+              name: "Unit Produk & Material Fisik " + (inv.spkNumber || inv.number),
+              description: "Pengadaan bodi panel enclosure baja presisi dan material pendukung.",
+              qty: 1,
+              unit: "Unit",
+              price: Math.round(inv.amount * 0.75),
+              total: Math.round(inv.amount * 0.75)
+            },
+            {
+              id: "inv_item_auto_" + idx + "_2",
+              type: "jasa",
+              name: "Jasa Fabrikasi, Finishing & Uji Mutu",
+              description: "Pengerjaan laser cutting, bending, oven powder coating dan uji fungsi kelistrikan.",
+              qty: 1,
+              unit: "Paket",
+              price: inv.amount - Math.round(inv.amount * 0.75),
+              total: inv.amount - Math.round(inv.amount * 0.75)
+            }
+          ];
+          updated = true;
+        }
+      });
     }
     if (updated) {
       fs.writeFileSync(DB_FILE, JSON.stringify(parsed, null, 2));
@@ -58,7 +98,7 @@ function writeDB(data: any) {
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: "15mb" }));
 
 // API endpoints
 app.get("/api/db/reset", (req, res) => {
@@ -70,6 +110,89 @@ app.get("/api/db/reset", (req, res) => {
 // GET all data
 app.get("/api/db", (req, res) => {
   res.json(readDB());
+});
+
+// COMPANIES API
+app.get("/api/companies", (req, res) => {
+  const db = readDB();
+  res.json(db.companies || getSeedData().companies);
+});
+
+app.post("/api/companies", (req, res) => {
+  const db = readDB();
+  if (!db.companies) db.companies = getSeedData().companies;
+
+  const { name, fullName, code, tagline, address, phone, email, npwp, bankInfo, logoText, logoSvg, logoUrl, logoType, primaryColor, badgeColor } = req.body;
+  const newCompanyId = (req.body.id || name.toLowerCase().replace(/[^a-z0-9]/g, '') + "_" + Date.now().toString().slice(-4));
+  
+  const newCompany: Company = {
+    id: newCompanyId,
+    name: name || "Perusahaan Baru",
+    fullName: fullName || ("PT " + (name || "PERUSAHAAN BARU").toUpperCase()),
+    code: (code || name.slice(0, 4)).toUpperCase(),
+    tagline: tagline || "Manufaktur & Solusi Industri Presisi",
+    badgeColor: badgeColor || "bg-indigo-600 text-white border-indigo-700",
+    primaryColor: primaryColor || "indigo",
+    address: address || "Kawasan Industri, Indonesia",
+    phone: phone || "+62 21 0000-0000",
+    email: email || "info@perusahaan.co.id",
+    npwp: npwp || "00.000.000.0-000.000",
+    bankInfo: bankInfo || "Bank BCA - A/C: 000-000-0000 a.n. " + (fullName || name),
+    logoText: logoText || name.slice(0, 2).toUpperCase(),
+    logoSvg: logoSvg || "",
+    logoUrl: logoUrl || "",
+    logoType: logoType || (logoUrl ? 'upload' : (logoSvg ? 'svg' : 'text'))
+  };
+
+  db.companies.push(newCompany);
+  writeDB(db);
+  res.status(201).json(newCompany);
+});
+
+app.patch("/api/companies/:id", (req, res) => {
+  const db = readDB();
+  if (!db.companies) db.companies = getSeedData().companies;
+  const { id } = req.params;
+
+  const compIndex = db.companies.findIndex((c: any) => c.id === id);
+  if (compIndex === -1) {
+    return res.status(404).json({ error: "Company not found" });
+  }
+
+  const comp = db.companies[compIndex];
+  const fields = [
+    'name', 'fullName', 'code', 'tagline', 'badgeColor', 
+    'primaryColor', 'address', 'phone', 'email', 'npwp', 
+    'bankInfo', 'logoText', 'logoSvg', 'logoUrl', 'logoType'
+  ];
+
+  fields.forEach((f) => {
+    if (req.body[f] !== undefined) {
+      comp[f] = req.body[f];
+    }
+  });
+
+  writeDB(db);
+  res.json(comp);
+});
+
+app.delete("/api/companies/:id", (req, res) => {
+  const db = readDB();
+  if (!db.companies) db.companies = getSeedData().companies;
+  const { id } = req.params;
+
+  if (db.companies.length <= 1) {
+    return res.status(400).json({ error: "Minimal harus ada 1 perusahaan terdaftar di sistem." });
+  }
+
+  const compIndex = db.companies.findIndex((c: any) => c.id === id);
+  if (compIndex === -1) {
+    return res.status(404).json({ error: "Company not found" });
+  }
+
+  const deleted = db.companies.splice(compIndex, 1)[0];
+  writeDB(db);
+  res.json({ message: "Company deleted successfully", company: deleted });
 });
 
 // USERS API
@@ -447,9 +570,57 @@ app.patch("/api/surat-jalan/:id", (req, res) => {
       const invNum = (db.invoices.length + 1).toString().padStart(4, '0');
       
       const spk = db.spks[spkIndex];
-      // Get actual quotation to calculate original total
+      // Get actual quotation to calculate original items and total
       const quotation = db.quotations.find((q: any) => q.id === spk.quotationId);
-      const subtotal = quotation ? quotation.total : 15000000; // default backup
+      
+      let invoiceItems: any[] = [];
+      let subtotal = 0;
+
+      if (quotation && quotation.items && quotation.items.length > 0) {
+        invoiceItems = quotation.items.map((it: any, idx: number) => {
+          const isJasa = it.type === 'jasa' || /jasa|instalasi|pemasangan|wiring|rakit|testing|service|ongkos|pemeliharaan/i.test(it.name);
+          const itemTotal = (it.qty || 1) * (it.price || 0);
+          subtotal += itemTotal;
+          return {
+            id: it.id || "inv_item_" + Date.now() + "_" + idx,
+            type: it.type || (isJasa ? 'jasa' : 'barang'),
+            name: it.name,
+            description: it.description || (isJasa 
+              ? "Jasa teknis, perakitan presisi, dan uji fungsi kelistrikan sesuai spesifikasi SPK " + spk.number 
+              : "Pengadaan unit / material fisik berspesifikasi industri mutu terjamin sesuai SPK " + spk.number),
+            qty: it.qty || 1,
+            unit: it.unit || "Pcs",
+            price: it.price || 0,
+            total: itemTotal
+          };
+        });
+      } else {
+        // Fallback realistic items (Barang + Jasa)
+        invoiceItems = [
+          {
+            id: "inv_item_" + Date.now() + "_1",
+            type: "barang",
+            name: "Unit Produk & Komponen Manufaktur " + spk.number,
+            description: "Pengadaan modul bodi enclosure plat baja, busbar tembaga, dan komponen utama.",
+            qty: 1,
+            unit: "Unit",
+            price: 12000000,
+            total: 12000000
+          },
+          {
+            id: "inv_item_" + Date.now() + "_2",
+            type: "jasa",
+            name: "Jasa Fabrikasi, Wiring & Uji Kelayakan",
+            description: "Jasa pengerjaan laser cutting, bending, oven powder coating, wiring instalasi dan uji mutu.",
+            qty: 1,
+            unit: "Paket",
+            price: 3000000,
+            total: 3000000
+          }
+        ];
+        subtotal = 15000000;
+      }
+
       const tax = Math.round(subtotal * 0.11); // 11% tax
 
       const newInv: Invoice = {
@@ -460,11 +631,14 @@ app.patch("/api/surat-jalan/:id", (req, res) => {
         number: invPrefix + invNum,
         date: new Date().toISOString().split('T')[0],
         customerName: spk.customerName,
+        itemDescription: "Pengadaan Barang Manufaktur dan Layanan Jasa Teknis Terintegrasi untuk " + spk.number,
+        items: invoiceItems,
         amount: subtotal,
         tax,
         totalAmount: subtotal + tax,
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days due
-        status: 'Unpaid'
+        status: 'Unpaid',
+        notes: "Pembayaran jatuh tempo dalam 30 hari kalender. Garansi barang dan hasil pengerjaan jasa dilindungi garansi resmi."
       };
       db.invoices.push(newInv);
     }
@@ -478,6 +652,60 @@ app.patch("/api/surat-jalan/:id", (req, res) => {
 app.get("/api/invoices", (req, res) => {
   const db = readDB();
   res.json(db.invoices);
+});
+
+// UPDATE INVOICE DETAILS & ITEMS (BARANG & JASA)
+app.patch("/api/invoices/:id", (req, res) => {
+  const db = readDB();
+  const { id } = req.params;
+  const { items, itemDescription, notes, dueDate, customerName, status } = req.body;
+
+  const invIndex = db.invoices.findIndex((inv: any) => inv.id === id);
+  if (invIndex === -1) {
+    return res.status(404).json({ error: "Invoice not found" });
+  }
+
+  const invoice = db.invoices[invIndex];
+  if (itemDescription !== undefined) invoice.itemDescription = itemDescription;
+  if (notes !== undefined) invoice.notes = notes;
+  if (dueDate !== undefined) invoice.dueDate = dueDate;
+  if (customerName !== undefined) invoice.customerName = customerName;
+  if (status !== undefined) invoice.status = status;
+
+  if (items && Array.isArray(items)) {
+    invoice.items = items.map((it: any) => ({
+      id: it.id || "inv_item_" + Date.now() + "_" + Math.random().toString().slice(2, 6),
+      type: it.type === 'jasa' ? 'jasa' : 'barang',
+      name: it.name || "Item",
+      description: it.description || "",
+      qty: Number(it.qty) || 1,
+      unit: it.unit || "Pcs",
+      price: Number(it.price) || 0,
+      total: (Number(it.qty) || 1) * (Number(it.price) || 0)
+    }));
+
+    const subtotal = invoice.items.reduce((acc: number, item: any) => acc + item.total, 0);
+    invoice.amount = subtotal;
+    invoice.tax = Math.round(subtotal * 0.11);
+    invoice.totalAmount = subtotal + invoice.tax;
+  }
+
+  writeDB(db);
+  res.json(invoice);
+});
+
+app.delete("/api/invoices/:id", (req, res) => {
+  const db = readDB();
+  const { id } = req.params;
+
+  const invIndex = db.invoices.findIndex((inv: any) => inv.id === id);
+  if (invIndex === -1) {
+    return res.status(404).json({ error: "Invoice not found" });
+  }
+
+  const deleted = db.invoices.splice(invIndex, 1)[0];
+  writeDB(db);
+  res.json({ message: "Invoice deleted successfully", invoice: deleted });
 });
 
 app.patch("/api/invoices/:id/pay", (req, res) => {
@@ -618,6 +846,7 @@ app.delete("/api/inventory/:id", (req, res) => {
 // SEED DATA GENERATOR
 function getSeedData() {
   return {
+    companies: COMPANIES,
     users: [
       { id: "u1", name: "Administrator", username: "admin", role: "admin", allowedMenus: ["sales", "spk", "production", "qa", "logistics", "finance", "inventory", "users"] },
       { id: "u2", name: "Budi Santoso", username: "budi", role: "sales", allowedMenus: ["sales", "finance"] },
@@ -637,12 +866,37 @@ function getSeedData() {
         customerPhone: "021-5551234",
         date: "2026-06-25",
         items: [
-          { id: "item1", name: "Panel Box Custom 1200x800x400 (Fujiyama Spec)", qty: 2, unit: "Unit", price: 12500000 },
-          { id: "item2", name: "Kabel NYY 4x16mm (Meter)", qty: 150, unit: "Meter", price: 75000 }
+          { 
+            id: "item1", 
+            type: "barang",
+            name: "Panel Box Custom 1200x800x400 (Fujiyama Spec)", 
+            description: "Enclosure plat baja 2mm, powder coating RAL-7035 abu-abu, tahan suhu oven industri dan proteksi IP65.",
+            qty: 2, 
+            unit: "Unit", 
+            price: 12500000 
+          },
+          { 
+            id: "item2", 
+            type: "barang",
+            name: "Kabel NYY 4x16mm Supreme", 
+            description: "Kabel tembaga isolasi PVC tegangan 0.6/1kV standar SPLN.",
+            qty: 150, 
+            unit: "Meter", 
+            price: 75000 
+          },
+          {
+            id: "item3",
+            type: "jasa",
+            name: "Jasa Fabrikasi, Wiring & Perakitan Busbar",
+            description: "Jasa pemotongan laser CNC, bending bodi panel, instalasi rel busbar tembaga, dan wiring kabel kontrol internal.",
+            qty: 1,
+            unit: "Paket",
+            price: 5000000
+          }
         ],
-        total: 36250000,
+        total: 41250000,
         status: "Approved",
-        notes: "Project fabrikasi panel oven high-temp Fujiyama."
+        notes: "Project fabrikasi panel oven high-temp Fujiyama Industry."
       },
       {
         id: "q_seed_arga_1",
@@ -653,10 +907,35 @@ function getSeedData() {
         customerPhone: "0267-889911",
         date: "2026-06-26",
         items: [
-          { id: "item_arga1", name: "Cubicle Panel Distribution 20kV", qty: 1, unit: "Unit", price: 68000000 },
-          { id: "item_arga2", name: "Digital Metering Relay ABB", qty: 2, unit: "Pcs", price: 14500000 }
+          { 
+            id: "item_arga1", 
+            type: "barang",
+            name: "Cubicle Panel Distribution 20kV", 
+            description: "Unit cubicle gardu tegangan menengah berisolasi udara dengan vacuum circuit breaker.",
+            qty: 1, 
+            unit: "Unit", 
+            price: 68000000 
+          },
+          { 
+            id: "item_arga2", 
+            type: "barang",
+            name: "Digital Metering Relay ABB", 
+            description: "Proteksi arus lebih dan hubung singkat mikroprosesor presisi tinggi.",
+            qty: 2, 
+            unit: "Pcs", 
+            price: 14500000 
+          },
+          {
+            id: "item_arga3",
+            type: "jasa",
+            name: "Jasa Testing, High-Voltage Injection & Commissioning",
+            description: "Pengujian injeksi tegangan tinggi 20kV, setting rele proteksi ABB, dan uji sertifikasi layak operasi.",
+            qty: 1,
+            unit: "Layanan",
+            price: 8500000
+          }
         ],
-        total: 97000000,
+        total: 105500000,
         status: "Approved",
         notes: "Instalasi gardu distribusi listrik Argathara Utama."
       },
@@ -669,10 +948,35 @@ function getSeedData() {
         customerPhone: "021-8991200",
         date: "2026-06-27",
         items: [
-          { id: "item_arta1", name: "Jig Fixture Precision Machining", qty: 5, unit: "Set", price: 8500000 },
-          { id: "item_arta2", name: "Shaft Stainless SS304 CNC Turned", qty: 50, unit: "Pcs", price: 450000 }
+          { 
+            id: "item_arta1", 
+            type: "barang",
+            name: "Jig Fixture Precision Machining", 
+            description: "Alat bantu pencekam presisi toleransi ±0.01mm material tool steel SKD11.",
+            qty: 5, 
+            unit: "Set", 
+            price: 8500000 
+          },
+          { 
+            id: "item_arta2", 
+            type: "barang",
+            name: "Shaft Stainless SS304 CNC Turned", 
+            description: "Poros putar transmisi stainless steel grade SS304 hasil bubut CNC mirror finish.",
+            qty: 50, 
+            unit: "Pcs", 
+            price: 450000 
+          },
+          {
+            id: "item_arta3",
+            type: "jasa",
+            name: "Jasa Heat Treatment & Hardness Inspection",
+            description: "Proses perlakuan panas vacuum hardening 58-60 HRC dan uji kekerasan material.",
+            qty: 1,
+            unit: "Paket",
+            price: 3500000
+          }
         ],
-        total: 65000000,
+        total: 68500000,
         status: "Draft",
         notes: "Pemesanan komponen perakitan Artajaya Pratama."
       }
@@ -764,7 +1068,104 @@ function getSeedData() {
     ],
     qaChecklists: [],
     suratJalanList: [],
-    invoices: [],
+    invoices: [
+      {
+        id: "inv_seed_fuji_1",
+        companyId: "fujiyama",
+        spkId: "spk_seed_fuji_1",
+        spkNumber: "SPK/FJ/2026/0001",
+        number: "INV/FJ/2026/0001",
+        date: "2026-06-28",
+        customerName: "PT Global Tech Indonesia",
+        itemDescription: "Pengadaan unit Panel Box Custom dan paket pengerjaan fabrikasi perakitan wiring oven industri.",
+        items: [
+          {
+            id: "inv_item_f1",
+            type: "barang",
+            name: "Panel Box Custom 1200x800x400 (Fujiyama Spec)",
+            description: "Enclosure box baja tebal 2mm, powder coating oven RAL-7035 abu-abu, tahan suhu panas industri dan proteksi IP65.",
+            qty: 2,
+            unit: "Unit",
+            price: 12500000,
+            total: 25000000
+          },
+          {
+            id: "inv_item_f2",
+            type: "barang",
+            name: "Kabel NYY 4x16mm Supreme",
+            description: "Kabel tembaga instalasi daya tegangan 0.6/1kV standar SNI/SPLN.",
+            qty: 150,
+            unit: "Meter",
+            price: 75000,
+            total: 11250000
+          },
+          {
+            id: "inv_item_f3",
+            type: "jasa",
+            name: "Jasa Fabrikasi, Wiring & Perakitan Busbar Tembaga",
+            description: "Jasa pemotongan laser CNC, bending bodi panel, instalasi busbar, dan terminasi kabel kontrol internal.",
+            qty: 1,
+            unit: "Paket",
+            price: 5000000,
+            total: 5000000
+          }
+        ],
+        amount: 41250000,
+        tax: 4537500,
+        totalAmount: 45787500,
+        dueDate: "2026-07-28",
+        status: "Unpaid",
+        notes: "Termin pembayaran Net 30 hari. Garansi barang fisik 12 bulan dan garansi pengerjaan jasa instalasi 6 bulan."
+      },
+      {
+        id: "inv_seed_arga_1",
+        companyId: "argathara",
+        spkId: "spk_seed_arga_1",
+        spkNumber: "SPK/AG/2026/0001",
+        number: "INV/AG/2026/0001",
+        date: "2026-06-29",
+        customerName: "PT Energi Perkasa Karawang",
+        itemDescription: "Pengadaan cubicle distribusi daya 20kV beserta jasa testing injeksi tegangan tinggi dan sertifikasi kelayakan.",
+        items: [
+          {
+            id: "inv_item_a1",
+            type: "barang",
+            name: "Cubicle Panel Distribution 20kV",
+            description: "Unit cubicle gardu distribusi tegangan menengah 20kV dilengkapi vacuum circuit breaker dan busbar tembaga.",
+            qty: 1,
+            unit: "Unit",
+            price: 68000000,
+            total: 68000000
+          },
+          {
+            id: "inv_item_a2",
+            type: "barang",
+            name: "Digital Metering Relay ABB",
+            description: "Modul digital protection relay mikroprosesor presisi monitoring tegangan & arus daya gardu.",
+            qty: 2,
+            unit: "Pcs",
+            price: 14500000,
+            total: 29000000
+          },
+          {
+            id: "inv_item_a3",
+            type: "jasa",
+            name: "Jasa Testing, High-Voltage Injection & Commissioning Proyek",
+            description: "Pengujian injeksi tegangan tinggi 20kV, kalibrasi sensor, pengujian trip rele, dan commissioning di lokasi proyek gardu.",
+            qty: 1,
+            unit: "Layanan",
+            price: 8500000,
+            total: 8500000
+          }
+        ],
+        amount: 105500000,
+        tax: 11605000,
+        totalAmount: 117105000,
+        dueDate: "2026-07-29",
+        status: "Paid",
+        notes: "Lunas ditransfer via Bank Mandiri resmi entitas PT Argathara Utama Mandiri."
+      }
+    ],
     inventory: [
       {
         id: "inv_fj_1",

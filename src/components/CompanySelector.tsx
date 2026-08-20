@@ -1,7 +1,7 @@
 import React from 'react';
 import { Company, CompanyId } from '../types';
 import { COMPANIES } from '../data/companies';
-import { Building2, ArrowRight, ShieldCheck, CheckCircle2, Factory, Zap, Wrench, RefreshCw, X } from 'lucide-react';
+import { Building2, ArrowRight, ShieldCheck, CheckCircle2, Factory, Zap, Wrench, RefreshCw, X, Palette, Edit3, Settings } from 'lucide-react';
 
 interface CompanySelectorProps {
   currentCompanyId: CompanyId | null;
@@ -10,6 +10,8 @@ interface CompanySelectorProps {
   isModal?: boolean;
   quotationCountByCompany?: Record<string, number>;
   spkCountByCompany?: Record<string, number>;
+  companies?: Company[];
+  onOpenCustomizer?: (companyId?: string) => void;
 }
 
 export const CompanySelector: React.FC<CompanySelectorProps> = ({
@@ -18,10 +20,29 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
   onCloseModal,
   isModal = false,
   quotationCountByCompany = {},
-  spkCountByCompany = {}
+  spkCountByCompany = {},
+  companies = COMPANIES,
+  onOpenCustomizer
 }) => {
-  const getCompanyIcon = (id: CompanyId) => {
-    switch (id) {
+  const getCompanyIcon = (company: Company) => {
+    if (company.logoUrl) {
+      return (
+        <img 
+          src={company.logoUrl} 
+          alt={company.name} 
+          className="h-8 max-w-[100px] object-contain rounded"
+        />
+      );
+    }
+    if (company.logoSvg) {
+      return (
+        <div 
+          className="h-8 max-w-[120px] flex items-center [&_svg]:h-7 [&_svg]:w-auto"
+          dangerouslySetInnerHTML={{ __html: company.logoSvg }} 
+        />
+      );
+    }
+    switch (company.id) {
       case 'fujiyama':
         return <Factory className="w-7 h-7 text-indigo-600" />;
       case 'argathara':
@@ -33,8 +54,11 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
     }
   };
 
-  const getCompanyBadgeClass = (id: CompanyId) => {
-    switch (id) {
+  const getCompanyBadgeClass = (company: Company) => {
+    if (company.badgeColor) {
+      return company.badgeColor;
+    }
+    switch (company.id) {
       case 'fujiyama':
         return 'bg-indigo-50 text-indigo-700 border-indigo-200';
       case 'argathara':
@@ -46,19 +70,23 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
     }
   };
 
-  const getButtonClass = (id: CompanyId, isSelected: boolean) => {
+  const getButtonClass = (company: Company, isSelected: boolean) => {
     if (isSelected) {
       return 'bg-slate-900 hover:bg-slate-800 text-white shadow-md';
     }
-    switch (id) {
-      case 'fujiyama':
-        return 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100';
-      case 'argathara':
+    switch (company.primaryColor) {
+      case 'emerald':
         return 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-100';
-      case 'artajaya':
+      case 'amber':
         return 'bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-100';
+      case 'rose':
+        return 'bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-100';
+      case 'slate':
+        return 'bg-slate-800 hover:bg-slate-900 text-white shadow-md shadow-slate-200';
+      case 'violet':
+        return 'bg-violet-600 hover:bg-violet-700 text-white shadow-md shadow-violet-100';
       default:
-        return 'bg-blue-600 hover:bg-blue-700 text-white';
+        return 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-100';
     }
   };
 
@@ -76,9 +104,22 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
           </button>
         )}
 
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium mb-3">
-          <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-          <span>Sistem Portal Multi-Company ERP</span>
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium">
+            <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Sistem Portal Multi-Company ERP</span>
+          </div>
+
+          {onOpenCustomizer && (
+            <button
+              onClick={() => onOpenCustomizer()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition shadow-2xs cursor-pointer"
+              title="Kustomisasi Nama, Logo, dan Info Perusahaan"
+            >
+              <Palette className="w-3.5 h-3.5" />
+              <span>Kustomisasi Nama & Logo Perusahaan</span>
+            </button>
+          )}
         </div>
 
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight mb-2">
@@ -91,7 +132,7 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
 
       {/* Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {COMPANIES.map((company) => {
+        {companies.map((company) => {
           const isSelected = currentCompanyId === company.id;
           const qCount = quotationCountByCompany[company.id] ?? 0;
           const spkCount = spkCountByCompany[company.id] ?? 0;
@@ -116,13 +157,28 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
 
               <div className="p-6">
                 {/* Logo & Code */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 group-hover:scale-105 transition-transform">
-                    {getCompanyIcon(company.id)}
+                <div className="flex items-start justify-between mb-4 gap-2">
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 group-hover:scale-105 transition-transform flex items-center justify-center min-w-14 min-h-14">
+                    {getCompanyIcon(company)}
                   </div>
-                  <span className={`text-xs font-bold px-2.5 py-1 rounded-md border ${getCompanyBadgeClass(company.id)}`}>
-                    {company.code}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-md border ${getCompanyBadgeClass(company)}`}>
+                      {company.code}
+                    </span>
+                    {onOpenCustomizer && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenCustomizer(company.id);
+                        }}
+                        className="text-[10px] text-slate-400 hover:text-indigo-600 font-semibold flex items-center gap-1 hover:underline mt-1"
+                        title="Edit Profil & Logo Perusahaan Ini"
+                      >
+                        <Edit3 className="w-3 h-3" /> Edit Logo
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Company Title */}
@@ -155,7 +211,7 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
                     onSelectCompany(company.id);
                   }}
                   className={`w-full py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all ${getButtonClass(
-                    company.id,
+                    company,
                     isSelected
                   )}`}
                 >
@@ -182,7 +238,7 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
             className="inline-flex items-center gap-1.5 font-semibold text-indigo-600 hover:text-indigo-800 whitespace-nowrap"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Lanjutkan ke {COMPANIES.find(c => c.id === currentCompanyId)?.name}</span>
+            <span>Lanjutkan ke {companies.find(c => c.id === currentCompanyId)?.name}</span>
           </button>
         )}
       </div>

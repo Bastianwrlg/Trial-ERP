@@ -4,19 +4,29 @@
  */
 
 import { useState } from "react";
-import { SuratJalan } from "../types";
+import { SuratJalan, Company, CompanyId } from "../types";
+import { COMPANIES } from "../data/companies";
 import { 
   Truck, CheckCircle, Navigation, ShieldAlert, 
-  MapPin, User, ShieldCheck, ClipboardList, Calendar 
+  MapPin, User, ShieldCheck, ClipboardList, Calendar,
+  Printer
 } from "lucide-react";
 
 interface LogisticsAppProps {
   sjList: SuratJalan[];
   onRefresh: () => void;
   currentUserRole: string;
+  selectedCompanyId?: CompanyId | null;
+  companies?: Company[];
 }
 
-export default function LogisticsApp({ sjList, onRefresh, currentUserRole }: LogisticsAppProps) {
+export default function LogisticsApp({ 
+  sjList, 
+  onRefresh, 
+  currentUserRole,
+  selectedCompanyId,
+  companies = COMPANIES
+}: LogisticsAppProps) {
   const [selectedSj, setSelectedSj] = useState<SuratJalan | null>(null);
 
   // Form states
@@ -81,20 +91,153 @@ export default function LogisticsApp({ sjList, onRefresh, currentUserRole }: Log
     }
   };
 
+  const handlePrintSuratJalan = (sj: SuratJalan) => {
+    const compId = sj.companyId || selectedCompanyId || 'fujiyama';
+    const company = companies.find(c => c.id === compId) || companies[0] || COMPANIES[0];
+
+    const printWin = window.open('', '_blank', 'width=900,height=1000');
+    if (!printWin) {
+      alert("Mohon izinkan pop-up browser untuk mencetak Surat Jalan.");
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="id">
+      <head>
+        <meta charset="UTF-8">
+        <title>Surat Jalan ${sj.number} - ${company.fullName || company.name}</title>
+        <style>
+          @page { size: A4 portrait; margin: 15mm; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; margin: 0; padding: 20px; font-size: 12px; }
+          .no-print-bar { background: #1e1b4b; color: white; padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+          .print-btn { background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+          .header-letterhead { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 16px; border-bottom: 3px double #cbd5e1; margin-bottom: 16px; }
+          .company-logo-box { max-width: 180px; max-height: 50px; }
+          .company-logo-box img { max-height: 48px; max-width: 180px; object-fit: contain; }
+          .company-info { text-align: right; font-size: 10px; color: #475569; line-height: 1.4; }
+          .company-name { font-size: 15px; font-weight: 900; color: #0f172a; }
+          .doc-title { text-align: center; margin: 16px 0; }
+          .doc-title h2 { margin: 0; font-size: 18px; font-weight: 900; letter-spacing: 1px; }
+          .doc-title p { margin: 2px 0 0; font-family: monospace; font-size: 13px; font-weight: bold; color: #334155; }
+          .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+          .meta-box { border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; font-size: 11px; }
+          .meta-label { font-size: 9px; text-transform: uppercase; font-weight: 800; color: #64748b; margin-bottom: 4px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          th { background: #f8fafc; border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 10px; text-transform: uppercase; text-align: left; }
+          td { border: 1px solid #e2e8f0; padding: 8px 10px; font-size: 11px; }
+          .text-center { text-align: center; }
+          .signatures { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 36px; text-align: center; font-size: 10px; }
+          .sig-box { border-top: 1px solid #cbd5e1; padding-top: 6px; font-weight: bold; }
+          .sig-space { height: 65px; }
+          @media print { .no-print-bar { display: none !important; } }
+        </style>
+      </head>
+      <body>
+        <div class="no-print-bar">
+          <div><strong>Surat Jalan Resmi</strong> - ${company.name}</div>
+          <button class="print-btn" onclick="window.print()">🖨️ Cetak Dokumen</button>
+        </div>
+
+        <div class="header-letterhead">
+          <div class="company-logo-box">
+            ${company.logoUrl 
+              ? `<img src="${company.logoUrl}" alt="${company.name}" />`
+              : (company.logoSvg || `<div style="font-size:20px; font-weight:900; color:#4338ca;">${company.name}</div>`)}
+          </div>
+          <div class="company-info">
+            <div class="company-name">${company.fullName || company.name}</div>
+            <div>${company.address}</div>
+            <div>Telp: ${company.phone || '-'} | Email: ${company.email || '-'}</div>
+          </div>
+        </div>
+
+        <div class="doc-title">
+          <h2>SURAT JALAN / DELIVERY ORDER</h2>
+          <p>NOMOR: ${sj.number}</p>
+        </div>
+
+        <div class="meta-grid">
+          <div class="meta-box">
+            <div class="meta-label">Penerima / Alamat Kirim:</div>
+            <strong style="font-size:12px;">${sj.customerName}</strong>
+            <div style="margin-top:4px; color:#475569;">${sj.deliveryAddress || 'Alamat Pabrik / Gudang Pelanggan'}</div>
+          </div>
+          <div class="meta-box">
+            <div class="meta-label">Informasi Ekspedisi & Kendaraan:</div>
+            <div>Tanggal Kirim: <strong>${sj.date}</strong></div>
+            <div>Sopir / Kurir: <strong>${sj.driverName || '-'}</strong></div>
+            <div>No. Polisi Plat: <strong style="font-family:monospace;">${sj.vehicleNumber || '-'}</strong></div>
+            <div>Referensi SPK: <strong style="font-family:monospace;">${sj.spkNumber}</strong></div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width:30px;" class="text-center">No.</th>
+              <th>Nama Barang / Deskripsi Paket</th>
+              <th style="width:70px;" class="text-center">Jumlah (Qty)</th>
+              <th style="width:80px;" class="text-center">Satuan</th>
+              <th>Keterangan / Kondisi</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sj.items.map((it, idx) => `
+              <tr>
+                <td class="text-center font-mono">${idx + 1}</td>
+                <td><strong>${it.name}</strong></td>
+                <td class="text-center font-mono" style="font-weight:bold;">${it.qty}</td>
+                <td class="text-center" style="color:#64748b;">${it.unit}</td>
+                <td style="color:#64748b; font-size:10px;">Lolos QC, Segel Utuh & Siap Pasang</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="signatures">
+          <div>
+            <div>Dibuat Oleh,</div>
+            <div class="sig-space"></div>
+            <div class="sig-box">Bagian Logistik & Gudang</div>
+          </div>
+          <div>
+            <div>Dibawa Oleh (Driver),</div>
+            <div class="sig-space"></div>
+            <div class="sig-box">${sj.driverName || 'Sopir Ekspedisi'}</div>
+          </div>
+          <div>
+            <div>Diterima Oleh,</div>
+            <div class="sig-space"></div>
+            <div class="sig-box">${sj.customerName}</div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWin.document.open();
+    printWin.document.write(htmlContent);
+    printWin.document.close();
+  };
+
   const hasAccessToLogistics = currentUserRole === 'admin' || currentUserRole === 'logistics';
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
-      <div className="bg-white border-b border-slate-200 px-6 py-4">
-        <h2 className="text-xl font-bold text-slate-800">Modul Logistik & Surat Jalan (SJ)</h2>
-        <p className="text-xs text-slate-500 mt-1">Kelola armada kurir, alamat pengiriman barang, serta terbitkan Surat Jalan resmi</p>
+      <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">Modul Logistik & Surat Jalan (SJ)</h2>
+          <p className="text-xs text-slate-500 mt-1">Kelola armada kurir, alamat pengiriman barang, serta terbitkan Surat Jalan resmi</p>
+        </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
         {/* Surat Jalan Side Panel */}
         <div className="w-1/3 bg-white border-r border-slate-200 flex flex-col">
-          <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+          <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Surat Jalan Terbit</span>
+            <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-bold">{sjList.length}</span>
           </div>
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
             {sjList.map((sj) => (
@@ -135,34 +278,45 @@ export default function LogisticsApp({ sjList, onRefresh, currentUserRole }: Log
           {selectedSj ? (
             <div className="max-w-4xl flex-1 flex flex-col">
               {/* Document Header Card */}
-              <div className="border border-slate-200 rounded-xl p-5 bg-gradient-to-r from-slate-50 to-white shadow-xs mb-6 flex justify-between items-center">
+              <div className="border border-slate-200 rounded-xl p-5 bg-gradient-to-r from-slate-50 to-white shadow-xs mb-6 flex flex-wrap justify-between items-center gap-4">
                 <div>
                   <span className="text-xs text-violet-700 font-bold bg-violet-50 border border-violet-200 px-2.5 py-0.5 rounded-full">Surat Jalan (Delivery Note)</span>
                   <h3 className="text-xl font-black text-slate-800 mt-2">{selectedSj.number}</h3>
                   <p className="text-xs text-slate-500 mt-1">Ref SPK: <strong className="text-slate-700">{selectedSj.spkNumber}</strong> | Penerbitan: {selectedSj.date}</p>
                 </div>
 
-                {/* Shipping state buttons */}
-                {hasAccessToLogistics && (
-                  <div className="flex gap-2">
-                    {selectedSj.status === 'Draft' && (
-                      <button
-                        onClick={() => handleUpdateStatus('Shipped')}
-                        className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 transition"
-                      >
-                        <Truck className="w-3.5 h-3.5" /> Kirim Barang
-                      </button>
-                    )}
-                    {selectedSj.status === 'Shipped' && (
-                      <button
-                        onClick={() => handleUpdateStatus('Delivered')}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 transition"
-                      >
-                        <CheckCircle className="w-3.5 h-3.5" /> Konfirmasi Sampai
-                      </button>
-                    )}
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePrintSuratJalan(selectedSj)}
+                    className="bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-bold px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition"
+                    title="Cetak Surat Jalan Resmi dengan Kop Perusahaan"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Cetak Surat Jalan</span>
+                  </button>
+
+                  {/* Shipping state buttons */}
+                  {hasAccessToLogistics && (
+                    <>
+                      {selectedSj.status === 'Draft' && (
+                        <button
+                          onClick={() => handleUpdateStatus('Shipped')}
+                          className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 transition"
+                        >
+                          <Truck className="w-3.5 h-3.5" /> Kirim Barang
+                        </button>
+                      )}
+                      {selectedSj.status === 'Shipped' && (
+                        <button
+                          onClick={() => handleUpdateStatus('Delivered')}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 transition"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" /> Konfirmasi Sampai
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Form & Items Grid */}

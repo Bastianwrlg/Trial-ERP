@@ -24,11 +24,19 @@ export default function SalesApp({ quotations, onRefresh, currentUserRole, selec
   const [customerPhone, setCustomerPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<Omit<QuotationItem, "id">[]>([
-    { name: "Panel Box Custom 1000x800", qty: 1, unit: "Unit", price: 8500000 }
+    { type: "barang", name: "Panel Box Custom 1000x800", description: "Material Plat Besi 2.0mm Powder Coating Grey RAL 7035 + Aksesoris Busbar", qty: 1, unit: "Unit", price: 8500000 },
+    { type: "jasa", name: "Jasa Wiring & Assembly Busbar", description: "Instalasi jalur pengkabelan internal panel, perakitan busbar tembaga, dan uji kontinuitas", qty: 1, unit: "Lot", price: 1500000 }
   ]);
 
-  const handleAddItem = () => {
-    setItems([...items, { name: "", qty: 1, unit: "Pcs", price: 0 }]);
+  const handleAddItem = (type: 'barang' | 'jasa' = 'barang') => {
+    setItems([...items, { 
+      type, 
+      name: "", 
+      description: type === 'barang' ? "Spesifikasi teknis / material barang..." : "Lingkup pengerjaan jasa / instalasi...", 
+      qty: 1, 
+      unit: type === 'barang' ? "Unit" : "Lot", 
+      price: 0 
+    }]);
   };
 
   const handleItemChange = (index: number, field: keyof Omit<QuotationItem, "id">, value: any) => {
@@ -67,7 +75,10 @@ export default function SalesApp({ quotations, onRefresh, currentUserRole, selec
         setCustomerEmail("");
         setCustomerPhone("");
         setNotes("");
-        setItems([{ name: "Panel Box Custom 1000x800", qty: 1, unit: "Unit", price: 8500000 }]);
+        setItems([
+          { type: "barang", name: "Panel Box Custom 1000x800", description: "Material Plat Besi 2.0mm Powder Coating Grey RAL 7035 + Aksesoris Busbar", qty: 1, unit: "Unit", price: 8500000 },
+          { type: "jasa", name: "Jasa Wiring & Assembly Busbar", description: "Instalasi jalur pengkabelan internal panel, perakitan busbar tembaga, dan uji kontinuitas", qty: 1, unit: "Lot", price: 1500000 }
+        ]);
         onRefresh();
       }
     } catch (err) {
@@ -194,79 +205,114 @@ export default function SalesApp({ quotations, onRefresh, currentUserRole, selec
 
             <div className="border-t border-slate-200 pt-6">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-slate-800">Daftar Barang & Jasa</h4>
-                <button
-                  type="button"
-                  onClick={handleAddItem}
-                  className="text-xs font-semibold text-violet-700 bg-violet-50 px-3 py-1.5 rounded border border-violet-200 hover:bg-violet-100 flex items-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Tambah Baris
-                </button>
+                <div>
+                  <h4 className="font-semibold text-slate-800">Daftar Rincian Barang & Jasa</h4>
+                  <p className="text-xs text-slate-500">Tentukan kategori, nama produk/jasa, dan deskripsi spesifikasi pengerjaan</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleAddItem('barang')}
+                    className="text-xs font-semibold text-sky-700 bg-sky-50 px-3 py-1.5 rounded-lg border border-sky-200 hover:bg-sky-100 flex items-center gap-1 transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> + Item Barang
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddItem('jasa')}
+                    className="text-xs font-semibold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200 hover:bg-amber-100 flex items-center gap-1 transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> + Item Jasa
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                   <thead>
                     <tr className="border-b border-slate-200 text-slate-500 bg-slate-50 text-xs tracking-wider font-semibold uppercase">
-                      <th className="py-2 px-3">Nama Produk / Jasa</th>
-                      <th className="py-2 px-3 w-20">Qty</th>
-                      <th className="py-2 px-3 w-24">Satuan</th>
-                      <th className="py-2 px-3 w-40">Harga Satuan (Rp)</th>
-                      <th className="py-2 px-3 w-40 text-right">Subtotal</th>
-                      <th className="py-2 px-3 w-12 text-center">Aksi</th>
+                      <th className="py-2.5 px-3 w-28">Kategori</th>
+                      <th className="py-2.5 px-3">Nama & Deskripsi Pekerjaan</th>
+                      <th className="py-2.5 px-3 w-20">Qty</th>
+                      <th className="py-2.5 px-3 w-24">Satuan</th>
+                      <th className="py-2.5 px-3 w-36">Harga Satuan (Rp)</th>
+                      <th className="py-2.5 px-3 w-36 text-right">Subtotal</th>
+                      <th className="py-2.5 px-3 w-10 text-center">Aksi</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100">
                     {items.map((item, idx) => (
-                      <tr key={idx} className="border-b border-slate-100">
-                        <td className="py-2 px-3">
+                      <tr key={idx} className="hover:bg-slate-50/60 transition">
+                        <td className="py-2.5 px-3 align-top">
+                          <select
+                            value={item.type || 'barang'}
+                            onChange={(e) => handleItemChange(idx, "type", e.target.value as 'barang' | 'jasa')}
+                            className={`w-full text-xs font-bold px-2 py-1.5 rounded border focus:outline-none ${
+                              item.type === 'jasa' 
+                                ? 'bg-amber-50 text-amber-800 border-amber-200' 
+                                : 'bg-sky-50 text-sky-800 border-sky-200'
+                            }`}
+                          >
+                            <option value="barang">📦 Barang</option>
+                            <option value="jasa">🛠️ Jasa</option>
+                          </select>
+                        </td>
+                        <td className="py-2.5 px-3 align-top space-y-1.5">
                           <input
                             type="text"
                             required
                             value={item.name}
                             onChange={(e) => handleItemChange(idx, "name", e.target.value)}
-                            placeholder="Contoh: Kabel Listrik / Perakitan Panel Box"
-                            className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-violet-500 focus:outline-none"
+                            placeholder={item.type === 'jasa' ? "Contoh: Jasa Instalasi & Setting Busbar" : "Contoh: Panel Box Custom 1000x800"}
+                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded text-sm font-semibold focus:ring-1 focus:ring-violet-500 focus:outline-none"
+                          />
+                          <input
+                            type="text"
+                            value={item.description || ''}
+                            onChange={(e) => handleItemChange(idx, "description", e.target.value)}
+                            placeholder={item.type === 'jasa' ? "Deskripsi lingkup pengerjaan / instalasi..." : "Deskripsi spesifikasi / dimensi / material..."}
+                            className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs text-slate-600 bg-slate-50/50 focus:bg-white focus:ring-1 focus:ring-violet-500 focus:outline-none"
                           />
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-2.5 px-3 align-top">
                           <input
                             type="number"
                             required
                             min="1"
                             value={item.qty}
                             onChange={(e) => handleItemChange(idx, "qty", e.target.value)}
-                            className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-violet-500 focus:outline-none"
+                            className="w-full px-2 py-1.5 border border-slate-300 rounded text-sm text-center focus:ring-1 focus:ring-violet-500 focus:outline-none"
                           />
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-2.5 px-3 align-top">
                           <input
                             type="text"
                             required
                             value={item.unit}
                             onChange={(e) => handleItemChange(idx, "unit", e.target.value)}
-                            placeholder="Pcs/Meter/Unit"
-                            className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-violet-500 focus:outline-none"
+                            placeholder="Unit/Lot/Pcs"
+                            className="w-full px-2 py-1.5 border border-slate-300 rounded text-sm text-center focus:ring-1 focus:ring-violet-500 focus:outline-none"
                           />
                         </td>
-                        <td className="py-2 px-3">
+                        <td className="py-2.5 px-3 align-top">
                           <input
                             type="number"
                             required
                             min="0"
                             value={item.price}
                             onChange={(e) => handleItemChange(idx, "price", e.target.value)}
-                            className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:ring-1 focus:ring-violet-500 focus:outline-none"
+                            className="w-full px-2 py-1.5 border border-slate-300 rounded text-sm text-right focus:ring-1 focus:ring-violet-500 focus:outline-none font-mono"
                           />
                         </td>
-                        <td className="py-2 px-3 text-right font-semibold text-slate-700">
+                        <td className="py-2.5 px-3 text-right font-bold text-slate-800 align-top font-mono pt-3">
                           {formatCurrency(item.qty * item.price)}
                         </td>
-                        <td className="py-2 px-3 text-center">
+                        <td className="py-2.5 px-3 text-center align-top pt-2">
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(idx)}
-                            className="text-red-500 hover:text-red-700 font-bold"
+                            className="text-red-400 hover:text-red-700 font-bold p-1 rounded hover:bg-red-50"
+                            title="Hapus baris"
                           >
                             ×
                           </button>
@@ -454,12 +500,15 @@ export default function SalesApp({ quotations, onRefresh, currentUserRole, selec
                   </div>
 
                   {/* Product items table */}
-                  <h4 className="font-semibold text-slate-800 mb-2">Item Rincian Harga</h4>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold text-slate-800">Rincian Barang & Jasa Penawaran</h4>
+                    <span className="text-xs text-slate-500 font-medium">{selectedQuotation.items?.length || 0} item terdaftar</span>
+                  </div>
                   <div className="border border-slate-200 rounded-xl overflow-hidden mb-6">
                     <table className="w-full text-left text-sm">
                       <thead>
                         <tr className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase border-b border-slate-200">
-                          <th className="py-3 px-4">Nama Deskripsi</th>
+                          <th className="py-3 px-4">Kategori & Deskripsi Item</th>
                           <th className="py-3 px-4 text-center">Qty</th>
                           <th className="py-3 px-4">Satuan</th>
                           <th className="py-3 px-4 text-right">Harga (Rp)</th>
@@ -469,11 +518,27 @@ export default function SalesApp({ quotations, onRefresh, currentUserRole, selec
                       <tbody className="divide-y divide-slate-100">
                         {selectedQuotation.items.map((item) => (
                           <tr key={item.id}>
-                            <td className="py-3 px-4 font-medium text-slate-800">{item.name}</td>
-                            <td className="py-3 px-4 text-center text-slate-700">{item.qty}</td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                                  item.type === 'jasa' 
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                                    : 'bg-sky-100 text-sky-800 border border-sky-200'
+                                }`}>
+                                  {item.type === 'jasa' ? 'Jasa' : 'Barang'}
+                                </span>
+                                <span className="font-semibold text-slate-800">{item.name}</span>
+                              </div>
+                              {item.description && (
+                                <p className="text-xs text-slate-500 mt-1 pl-1 border-l-2 border-slate-200 ml-1 italic">
+                                  {item.description}
+                                </p>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-center text-slate-700 font-semibold">{item.qty}</td>
                             <td className="py-3 px-4 text-slate-600">{item.unit}</td>
-                            <td className="py-3 px-4 text-right text-slate-700">{formatCurrency(item.price)}</td>
-                            <td className="py-3 px-4 text-right font-semibold text-slate-800">{formatCurrency(item.qty * item.price)}</td>
+                            <td className="py-3 px-4 text-right text-slate-700 font-mono">{formatCurrency(item.price)}</td>
+                            <td className="py-3 px-4 text-right font-bold text-slate-800 font-mono">{formatCurrency(item.qty * item.price)}</td>
                           </tr>
                         ))}
                       </tbody>
